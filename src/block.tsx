@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import Scene3D from './Scene3D';
 import ControlPanel from './ControlPanel';
 import { useSimulationStore } from './store';
@@ -9,6 +10,31 @@ interface BlockProps {
   description?: string;
   initialBodies?: number;
   showPresets?: boolean;
+}
+
+function ErrorFallback({ error }: { error: Error }) {
+  return (
+    <div style={{ padding: '20px', color: 'white', background: '#000814' }}>
+      <h2>Something went wrong:</h2>
+      <pre style={{ color: 'red' }}>{error.message}</pre>
+      <button onClick={() => window.location.reload()}>Reload</button>
+    </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div style={{ 
+      height: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      background: '#000814',
+      color: 'white'
+    }}>
+      <div>Loading 3D Physics Simulation...</div>
+    </div>
+  );
 }
 
 const Block: React.FC<BlockProps> = ({ 
@@ -68,12 +94,16 @@ const Block: React.FC<BlockProps> = ({
   }, [bodies.length, initialBodies, loadPreset]);
 
   return (
-    <div className="three-body-container">
-      <div className="scene-container">
-        <Scene3D />
+    <ErrorBoundary FallbackComponent={ErrorFallback}>
+      <div className="three-body-container">
+        <div className="scene-container">
+          <Suspense fallback={<LoadingFallback />}>
+            <Scene3D />
+          </Suspense>
+        </div>
+        <ControlPanel />
       </div>
-      <ControlPanel />
-    </div>
+    </ErrorBoundary>
   );
 };
 
