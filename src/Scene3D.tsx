@@ -15,7 +15,7 @@ function BodyMesh({ body, isSelected, onSelect }: {
   const { editMode, showVelocityVectors } = useSimulationStore();
   
   useFrame(() => {
-    if (meshRef.current) {
+    if (meshRef.current && body.position) {
       meshRef.current.position.copy(body.position);
     }
   });
@@ -27,6 +27,9 @@ function BodyMesh({ body, isSelected, onSelect }: {
     }
   };
 
+  // Ensure position is valid
+  const safePosition = body.position || new THREE.Vector3(0, 0, 0);
+
   return (
     <group>
       {/* Main body sphere */}
@@ -34,7 +37,7 @@ function BodyMesh({ body, isSelected, onSelect }: {
         ref={meshRef}
         args={[body.radius, 32, 32]}
         onClick={handleClick}
-        position={[body.position.x, body.position.y, body.position.z]}
+        position={[safePosition.x, safePosition.y, safePosition.z]}
       >
         <meshStandardMaterial 
           color={body.color} 
@@ -46,9 +49,9 @@ function BodyMesh({ body, isSelected, onSelect }: {
       </Sphere>
       
       {/* Velocity vector */}
-      {showVelocityVectors && (
+      {showVelocityVectors && body.velocity && (
         <VelocityVector 
-          position={body.position} 
+          position={safePosition} 
           velocity={body.velocity} 
           color={body.color}
         />
@@ -56,7 +59,7 @@ function BodyMesh({ body, isSelected, onSelect }: {
       
       {/* Mass label */}
       <Text
-        position={[body.position.x, body.position.y + body.radius + 0.5, body.position.z]}
+        position={[safePosition.x, safePosition.y + body.radius + 0.5, safePosition.z]}
         fontSize={0.3}
         color="white"
         anchorX="center"
@@ -74,6 +77,8 @@ function VelocityVector({ position, velocity, color }: {
   velocity: THREE.Vector3;
   color: string;
 }) {
+  if (!position || !velocity) return null;
+  
   const points = [
     position,
     new THREE.Vector3().addVectors(position, velocity.clone().multiplyScalar(2))
@@ -91,7 +96,7 @@ function VelocityVector({ position, velocity, color }: {
 
 // Trail Component
 function Trail({ trail, color }: { trail: THREE.Vector3[]; color: string }) {
-  if (trail.length < 2) return null;
+  if (!trail || trail.length < 2) return null;
   
   return (
     <Line
@@ -104,24 +109,36 @@ function Trail({ trail, color }: { trail: THREE.Vector3[]; color: string }) {
   );
 }
 
-// Body Transform Control
+// Body Transform Control - Fixed Implementation
 function BodyTransformControl({ body }: { body: Body }) {
   const { updateBody, editMode } = useSimulationStore();
+  const meshRef = useRef<THREE.Mesh>(null);
   
-  if (editMode === 'simulate') return null;
+  if (editMode === 'simulate' || !body.position) return null;
+
+  const handleTransform = () => {
+    if (meshRef.current) {
+      const newPosition = meshRef.current.position.clone();
+      updateBody(body.id, { position: newPosition });
+    }
+  };
 
   return (
-    <TransformControls
-      object-position={[body.position.x, body.position.y, body.position.z]}
-      mode="translate"
-      onObjectChange={(e) => {
-        if (e && e.target) {
-          const newPosition = new THREE.Vector3();
-          e.target.getWorldPosition(newPosition);
-          updateBody(body.id, { position: newPosition });
-        }
-      }}
-    />
+    <>
+      <mesh
+        ref={meshRef}
+        position={[body.position.x, body.position.y, body.position.z]}
+        visible={false}
+      >
+        <sphereGeometry args={[body.radius]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+      <TransformControls
+        object={meshRef}
+        mode="translate"
+        onObjectChange={handleTransform}
+      />
+    </>
   );
 }
 
@@ -150,7 +167,7 @@ function SceneContent() {
   } = useSimulationStore();
 
   const handleCanvasClick = (e: ThreeEvent<MouseEvent>) => {
-    if (editMode === 'place') {
+    if (editMode === 'place' && e.point) {
       const newBody: Body = {
         id: Math.random().toString(36).substr(2, 9),
         position: e.point.clone(),
@@ -191,25 +208,30 @@ function SceneContent() {
       <axesHelper args={[5]} />
       
       {/* Bodies */}
-      {bodies.map((body) => (
-        <group key={body.id}>
-          <BodyMesh
-            body={body}
-            isSelected={body.id === selectedBodyId}
-            onSelect={() => selectBody(body.id)}
-          />
-          
-          {/* Transform controls for selected body */}
-          {body.id === selectedBodyId && editMode !== 'simulate' && (
-            <BodyTransformControl body={body} />
-          )}
-          
-          {/* Trails */}
-          {showTrails && body.trail.length > 1 && (
-            <Trail trail={body.trail} color={body.color} />
-          )}
-        </group>
-      ))}
+      {bodies.map((body) => {
+        // Safety check to ensure body has required properties
+        if (!body || !body.position) return null;
+        
+        return (
+          <group key={body.id}>
+            <BodyMesh
+              body={body}
+              isSelected={body.id === selectedBodyId}
+              onSelect={() => selectBody(body.id)}
+            />
+            
+            {/* Transform controls for selected body */}
+            {body.id === selectedBodyId && editMode !== 'simulate' && (
+              <BodyTransformControl body={body} />
+            )}
+            
+            {/* Trails */}
+            {showTrails && body.trail && body.trail.length > 1 && (
+              <Trail trail={body.trail} color={body.color} />
+            )}
+          </group>
+        );
+      })}
       
       {/* Clickable plane for body placement */}
       <mesh
@@ -231,6 +253,10 @@ export default function Scene3D() {
     <Canvas
       camera={{ position: [8, 8, 8], fov: 60 }}
       style={{ background: '#000814' }}
+      gl={{ antialias: true }}
+      onCreated={({ gl }) => {
+        gl.setClearColor('#000814');
+      }}
     >
       <SceneContent />
     </Canvas>
