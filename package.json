@@ -9,7 +9,9 @@
     "@react-three/fiber": "^9.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "three": "^0.174.0"
+    "three": "^0.174.0",
+    "zustand": "^4.4.0",
+    "leva": "^0.9.35"
   },
   "devDependencies": {
     "@types/react": "^19.0.8",
