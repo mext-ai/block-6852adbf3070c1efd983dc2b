@@ -107,14 +107,13 @@ function Trail({ trail, color }: { trail: THREE.Vector3[]; color: string }) {
 // Body Transform Control
 function BodyTransformControl({ body }: { body: Body }) {
   const { updateBody, editMode } = useSimulationStore();
-  const [mode, setMode] = useState<'translate' | 'rotate'>('translate');
   
   if (editMode === 'simulate') return null;
 
   return (
     <TransformControls
       object-position={[body.position.x, body.position.y, body.position.z]}
-      mode={mode}
+      mode="translate"
       onObjectChange={(e) => {
         if (e && e.target) {
           const newPosition = new THREE.Vector3();
@@ -126,62 +125,29 @@ function BodyTransformControl({ body }: { body: Body }) {
   );
 }
 
-// Placement Guide
-function PlacementGuide() {
-  const { editMode } = useSimulationStore();
-  const [hoverPosition, setHoverPosition] = useState<THREE.Vector3 | null>(null);
+// Animation Loop Component
+function AnimationLoop() {
+  const { isRunning, stepSimulation } = useSimulationStore();
   
-  if (editMode !== 'place') return null;
+  useFrame(() => {
+    if (isRunning) {
+      stepSimulation();
+    }
+  });
   
-  return (
-    <mesh
-      onPointerMove={(e) => {
-        setHoverPosition(e.point);
-      }}
-      onPointerLeave={() => setHoverPosition(null)}
-      position={[0, 0, 0]}
-      visible={false}
-    >
-      <planeGeometry args={[20, 20]} />
-      <meshBasicMaterial transparent opacity={0} />
-      {hoverPosition && (
-        <Sphere args={[0.2]} position={hoverPosition}>
-          <meshBasicMaterial color="white" transparent opacity={0.5} />
-        </Sphere>
-      )}
-    </mesh>
-  );
+  return null;
 }
 
-// Grid Helper
-function GridHelper() {
-  return (
-    <group>
-      <gridHelper args={[20, 20, '#444444', '#222222']} />
-      <axesHelper args={[5]} />
-    </group>
-  );
-}
-
-// Main Scene Component
-export default function Scene3D() {
+// Scene Content Component (everything inside Canvas)
+function SceneContent() {
   const {
     bodies,
     selectedBodyId,
     selectBody,
     addBody,
     editMode,
-    showTrails,
-    isRunning,
-    stepSimulation
+    showTrails
   } = useSimulationStore();
-
-  // Animation loop
-  useFrame(() => {
-    if (isRunning) {
-      stepSimulation();
-    }
-  });
 
   const handleCanvasClick = (e: ThreeEvent<MouseEvent>) => {
     if (editMode === 'place') {
@@ -202,11 +168,10 @@ export default function Scene3D() {
   };
 
   return (
-    <Canvas
-      camera={{ position: [8, 8, 8], fov: 60 }}
-      style={{ background: '#000814' }}
-      onPointerMissed={() => editMode !== 'place' && selectBody(null)}
-    >
+    <>
+      {/* Animation Loop */}
+      <AnimationLoop />
+      
       {/* Lighting */}
       <ambientLight intensity={0.4} />
       <pointLight position={[10, 10, 10]} intensity={1} />
@@ -221,9 +186,9 @@ export default function Scene3D() {
         minDistance={2}
       />
       
-      {/* Scene Elements */}
-      <GridHelper />
-      <PlacementGuide />
+      {/* Grid and Axes */}
+      <gridHelper args={[20, 20, '#444444', '#222222']} />
+      <axesHelper args={[5]} />
       
       {/* Bodies */}
       {bodies.map((body) => (
@@ -256,6 +221,18 @@ export default function Scene3D() {
         <planeGeometry args={[100, 100]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
+    </>
+  );
+}
+
+// Main Scene Component
+export default function Scene3D() {
+  return (
+    <Canvas
+      camera={{ position: [8, 8, 8], fov: 60 }}
+      style={{ background: '#000814' }}
+    >
+      <SceneContent />
     </Canvas>
   );
 }
